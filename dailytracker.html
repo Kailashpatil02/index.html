@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Expense Tracker</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body {
+    text-align: center;
+    font-family: Arial;
+    background: linear-gradient(135deg, #e6d3b3, #b89b72);
+}
+
+#title {
+    color: #4b2e1e;
+    font-size: 30px;
+}
+
+#topBar {
+    text-align: right;
+    padding: 10px;
+    display: none;
+}
+
+input, button {
+    padding: 10px;
+    margin: 5px;
+    width: 220px;
+}
+
+button {
+    background: linear-gradient(135deg, #b0895a, #5a3e2b);
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+/* Logout hover */
+#logoutBtn:hover {
+    background: red;
+    box-shadow: 0 0 10px red, 0 0 20px red;
+}
+
+/* Forgot password text */
+#forgotText {
+    color: #5a3e2b;
+    cursor: pointer;
+    text-align: center;
+    font-size: 14px;
+}
+
+#forgotText:hover {
+    color: red;
+    text-shadow: 0 0 5px red;
+}
+
+.entry {
+    background: white;
+    margin: 10px auto;
+    padding: 10px;
+    width: 300px;
+    border-radius: 8px;
+}
+
+.profit { color: green; }
+.loss { color: red; }
+</style>
+</head>
+
+<body>
+
+<div id="topBar">
+    <span id="userDisplay"></span>
+    <button id="logoutBtn" onclick="logout()">Logout</button>
+</div>
+
+<h1 id="title">DAILY EXPENSE TRACKER</h1>
+<h3 id="greeting" style="display:none;"></h3>
+
+<!-- LOGIN / REGISTER -->
+<div id="loginBox">
+    <input type="text" id="username" placeholder="Username"><br>
+    <input type="email" id="gmail" placeholder="Gmail ID"><br>
+    <input type="text" id="mobile" placeholder="Mobile Number"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+
+    <button onclick="login()">Login</button>
+    <button onclick="register()">Register</button>
+
+    <p id="forgotText" onclick="forgotPassword()">Forgot Password?</p>
+</div>
+
+<hr>
+
+<input type="date" id="dateInput"><br>
+<input type="number" id="incomeInput" placeholder="Income"><br>
+<input type="number" id="expenseInput" placeholder="Expense"><br>
+<input type="text" id="reasonInput" placeholder="Reason"><br>
+
+<button onclick="addData()">Add / Update</button>
+
+<hr>
+
+<h3>Entries</h3>
+<div id="history"></div>
+
+<hr>
+
+<select id="month">
+<option value="0">Jan</option>
+<option value="1">Feb</option>
+<option value="2">Mar</option>
+<option value="3">Apr</option>
+<option value="4">May</option>
+<option value="5">Jun</option>
+<option value="6">Jul</option>
+<option value="7">Aug</option>
+<option value="8">Sep</option>
+<option value="9">Oct</option>
+<option value="10">Nov</option>
+<option value="11">Dec</option>
+</select><br>
+
+<button onclick="showReport()">Show Report</button>
+<button onclick="downloadExcel()">Download Excel</button>
+<button onclick="downloadPDF()">Download PDF</button>
+
+<h3 id="reportIncome"></h3>
+<h3 id="reportExpense"></h3>
+<h2 id="reportResult"></h2>
+
+<canvas id="chartCanvas"></canvas>
+
+<script>
+let user="", data=[], editIndex=-1, chart;
+let generatedOTP="";
+
+// REGISTER
+function register(){
+    let u=username.value;
+    let g=gmail.value;
+    let m=mobile.value;
+    let p=password.value;
+
+    if(!u||!g||!m||!p) return alert("Fill all fields");
+
+    let users=JSON.parse(localStorage.getItem("users"))||{};
+    if(users[u]) return alert("User exists");
+
+    generatedOTP=Math.floor(100000+Math.random()*900000);
+    alert("OTP: "+generatedOTP);
+
+    let entered=prompt("Enter OTP");
+    if(entered!=generatedOTP) return alert("Wrong OTP");
+
+    users[u]={password:p,gmail:g,mobile:m};
+    localStorage.setItem("users",JSON.stringify(users));
+
+    alert("Registered ✅");
+}
+
+// LOGIN
+function login(){
+    let u=username.value, p=password.value;
+    let users=JSON.parse(localStorage.getItem("users"))||{};
+
+    if(!users[u]) return alert("Register first");
+    if(users[u].password!==p) return alert("Wrong password");
+
+    user=u;
+    loginBox.style.display="none";
+    topBar.style.display="block";
+    userDisplay.innerHTML="👤 "+user;
+
+    data=JSON.parse(localStorage.getItem(user))||[];
+    updateUI();
+}
+
+// LOGOUT
+function logout(){
+    user="";
+    data=[];
+    history.innerHTML="";
+    loginBox.style.display="block";
+    topBar.style.display="none";
+}
+
+// FORGOT PASSWORD
+function forgotPassword(){
+    let u=prompt("Enter username");
+    let users=JSON.parse(localStorage.getItem("users"))||{};
+
+    if(!users[u]) return alert("User not found");
+
+    let otp=Math.floor(100000+Math.random()*900000);
+    alert("OTP: "+otp);
+
+    let entered=prompt("Enter OTP");
+    if(entered!=otp) return alert("Wrong OTP");
+
+    let newPass=prompt("Enter new password");
+    if(!newPass) return;
+
+    users[u].password=newPass;
+    localStorage.setItem("users",JSON.stringify(users));
+
+    alert("Password updated");
+}
+
+// ADD DATA
+function addData(){
+    if(!user) return alert("Login first");
+
+    let d=dateInput.value;
+    let i=+incomeInput.value;
+    let e=+expenseInput.value;
+    let r=reasonInput.value;
+
+    if(!d) return alert("Enter date");
+
+    if(editIndex==-1) data.push({d,i,e,r});
+    else {data[editIndex]={d,i,e,r}; editIndex=-1;}
+
+    localStorage.setItem(user,JSON.stringify(data));
+    clearFields();
+    updateUI();
+}
+
+function editData(i){
+    let x=data[i];
+    dateInput.value=x.d;
+    incomeInput.value=x.i;
+    expenseInput.value=x.e;
+    reasonInput.value=x.r;
+    editIndex=i;
+}
+
+function deleteData(i){
+    data.splice(i,1);
+    localStorage.setItem(user,JSON.stringify(data));
+    updateUI();
+}
+
+function clearFields(){
+    dateInput.value="";
+    incomeInput.value="";
+    expenseInput.value="";
+    reasonInput.value="";
+}
+
+function updateUI(){
+    history.innerHTML="";
+    data.forEach((x,i)=>{
+        history.innerHTML+=`
+        <div class="entry">
+        📅 ${x.d}<br>
+        ₹${x.i} | ₹${x.e}<br>
+        ${x.r}<br>
+        <button onclick="editData(${i})">Edit</button>
+        <button onclick="deleteData(${i})">Delete</button>
+        </div>`;
+    });
+}
+
+// REPORT
+function showReport(){
+    let m=month.value,inc=0,exp=0;
+
+    data.forEach(x=>{
+        if(new Date(x.d).getMonth()==m){
+            inc+=x.i; exp+=x.e;
+        }
+    });
+
+    reportIncome.innerHTML="Income: ₹"+inc;
+    reportExpense.innerHTML="Expense: ₹"+exp;
+
+    let bal=inc-exp;
+    reportResult.innerHTML=(bal>0?"Profit ":"Loss ")+bal;
+    reportResult.className=bal>0?"profit":"loss";
+
+    if(chart) chart.destroy();
+
+    chart=new Chart(chartCanvas,{
+        type:'bar',
+        data:{
+            labels:['Income','Expense'],
+            datasets:[{
+                data:[inc,exp],
+                backgroundColor:['green','red']
+            }]
+        }
+    });
+}
+
+// EXCEL
+function downloadExcel(){
+    let csv="Date,Income,Expense,Reason\n";
+    data.forEach(x=>{
+        csv+=`${x.d},${x.i},${x.e},${x.r}\n`;
+    });
+
+    let blob=new Blob([csv]);
+    let a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=user+"_report.csv";
+    a.click();
+}
+
+// PDF
+function downloadPDF(){
+    const { jsPDF } = window.jspdf;
+    let doc=new jsPDF(), y=10;
+
+    doc.text("Report - "+user,10,y);
+    y+=10;
+
+    data.forEach(x=>{
+        doc.text(`Date:${x.d} Inc:${x.i} Exp:${x.e} ${x.r}`,10,y);
+        y+=10;
+    });
+
+    doc.save(user+"_report.pdf");
+}
+</script>
+
+</body>
+</html>
